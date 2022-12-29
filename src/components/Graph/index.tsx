@@ -1,16 +1,18 @@
 import React from "react";
+import { Button } from "src/components/Button";
 import {
   ReactZoomPanPinchRef,
   TransformComponent,
   TransformWrapper,
 } from "react-zoom-pan-pinch";
-import { Canvas, Edge, ElkRoot } from "reaflow";
+import { Canvas, Edge, ElkRoot, hasLink } from "reaflow";
 import { CustomNode } from "src/components/CustomNode";
 import useConfig from "src/store/useConfig";
 import useGraph from "src/store/useGraph";
 import styled from "styled-components";
 import { Loading } from "../Loading";
 import { ErrorView } from "./ErrorView";
+// import { parser } from "src/utils/jsonParser";
 
 interface GraphProps {
   isWidget?: boolean;
@@ -31,10 +33,10 @@ const StyledEditorWrapper = styled.div<{ isWidget: boolean }>`
     cursor: move;
   }
 
-  .dragging,
+  /* .dragging,
   .dragging button {
     pointer-events: none;
-  }
+  } */
 
   rect {
     fill: ${({ theme }) => theme.BACKGROUND_NODE};
@@ -49,6 +51,9 @@ const GraphComponent = ({
   const setLoading = useGraph(state => state.setLoading);
   const setConfig = useConfig(state => state.setConfig);
   const centerView = useConfig(state => state.centerView);
+  // const getJson = useConfig(state => state.getJson);
+  // const setJson = useConfig(state => state.setJson);
+  const setGraphValue = useGraph(state => state.setGraphValue);
 
   const loading = useGraph(state => state.loading);
   const direction = useGraph(state => state.direction);
@@ -59,6 +64,9 @@ const GraphComponent = ({
     width: 1,
     height: 1,
   });
+
+  const [dragging, setDragging] = React.useState(false);
+  const [graphEdited, setGraphEdited] = React.useState(false);
 
   const handleNodeClick = React.useCallback(
     (e: React.MouseEvent<SVGElement>, data: NodeData) => {
@@ -127,11 +135,18 @@ const GraphComponent = ({
     if (input) input.blur();
   }, []);
 
+  const updateJSON = () => {
+    // parse edges object + nodes object into JSON, stringify it, and then setJSON to the string
+    // parse function available
+    setGraphEdited(false);
+  };
+
   if (nodes.length > 8_000) return <ErrorView />;
 
   return (
     <StyledEditorWrapper isWidget={isWidget} onContextMenu={e => e.preventDefault()}>
       {loading && <Loading message="Painting graph..." />}
+      {graphEdited && <Button onClick={updateJSON}>Update JSON</Button>}
       <TransformWrapper
         maxScale={2}
         minScale={0.05}
@@ -140,10 +155,11 @@ const GraphComponent = ({
         zoomAnimation={{ animationType: "linear" }}
         doubleClick={{ disabled: true }}
         onInit={onInit}
-        onPanning={ref => ref.instance.wrapperComponent?.classList.add("dragging")}
-        onPanningStop={ref =>
-          ref.instance.wrapperComponent?.classList.remove("dragging")
-        }
+        disabled={dragging}
+        // onPanning={ref => ref.instance.wrapperComponent?.classList.add("dragging")} // Disabled to allow node drop
+        // onPanningStop={ref =>                                                       // Disabled to allow node drop
+        //   ref.instance.wrapperComponent?.classList.remove("dragging")
+        // }
       >
         <TransformComponent
           wrapperStyle={{
@@ -164,15 +180,25 @@ const GraphComponent = ({
             onCanvasClick={onCanvasClick}
             zoomable={false}
             animated={false}
-            readonly={true}
+            readonly={false} // this has to be false to drag and drop the nodes of the graph
             dragEdge={null}
             dragNode={null}
             fit={true}
             key={direction}
-            node={props => <CustomNode {...props} onClick={handleNodeClick} />}
+            node={props => <CustomNode {...props} onClick={handleNodeClick} onDrag={() => setDragging(true)} onDragEnd={() => setDragging(false)} dragType="node" />}
             edge={props => (
               <Edge {...props} containerClassName={`edge-${props.id}`} />
-            )}
+              )}
+            onNodeLinkCheck={(_event, from: NodeData, to: NodeData) => from.id !== to.id && !hasLink(edges, to, from)}
+            onNodeLink={(_event, from: NodeData, to: NodeData) => {
+              const edgeToRemove = edges.find((edg) => edg.to === from.id);
+              console.log({edgeToRemove});
+              const edgeToAdd = {id: `e${to.id}-${from.id}`, from: `${to.id}`, to: `${from.id}`};
+              console.log({edgeToAdd});
+              const newEdges = [...edges.filter(edge => edgeToRemove && edge.id !== edgeToRemove.id), edgeToAdd];
+              setGraphValue("edges", newEdges); // These lines rewrite the edges but don't rewrite the JSON
+              setGraphEdited(true);
+            }}           
           />
         </TransformComponent>
       </TransformWrapper>
