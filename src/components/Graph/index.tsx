@@ -12,7 +12,7 @@ import useGraph from "src/store/useGraph";
 import styled from "styled-components";
 import { Loading } from "../Loading";
 import { ErrorView } from "./ErrorView";
-// import { parser } from "src/utils/jsonParser";
+import { parseDataToJSON } from "src/utils/jsonParser";
 
 interface GraphProps {
   isWidget?: boolean;
@@ -51,8 +51,7 @@ const GraphComponent = ({
   const setLoading = useGraph(state => state.setLoading);
   const setConfig = useConfig(state => state.setConfig);
   const centerView = useConfig(state => state.centerView);
-  // const getJson = useConfig(state => state.getJson);
-  // const setJson = useConfig(state => state.setJson);
+  const setJson = useConfig(state => state.setJson);
   const setGraphValue = useGraph(state => state.setGraphValue);
 
   const loading = useGraph(state => state.loading);
@@ -66,7 +65,7 @@ const GraphComponent = ({
   });
 
   const [dragging, setDragging] = React.useState(false);
-  const [graphEdited, setGraphEdited] = React.useState(false);
+  const [updatedJSON, setUpdatedJSON] = React.useState("");
 
   const handleNodeClick = React.useCallback(
     (e: React.MouseEvent<SVGElement>, data: NodeData) => {
@@ -136,9 +135,8 @@ const GraphComponent = ({
   }, []);
 
   const updateJSON = () => {
-    // parse edges object + nodes object into JSON, stringify it, and then setJSON to the string
-    // parse function available
-    setGraphEdited(false);
+    setJson(updatedJSON);
+    setUpdatedJSON("");
   };
 
   if (nodes.length > 8_000) return <ErrorView />;
@@ -146,7 +144,7 @@ const GraphComponent = ({
   return (
     <StyledEditorWrapper isWidget={isWidget} onContextMenu={e => e.preventDefault()}>
       {loading && <Loading message="Painting graph..." />}
-      {graphEdited && <Button onClick={updateJSON}>Update JSON</Button>}
+      {updatedJSON && <Button onClick={updateJSON}>Update JSON</Button>}
       <TransformWrapper
         maxScale={2}
         minScale={0.05}
@@ -192,12 +190,11 @@ const GraphComponent = ({
             onNodeLinkCheck={(_event, from: NodeData, to: NodeData) => from.id !== to.id && !hasLink(edges, to, from)}
             onNodeLink={(_event, from: NodeData, to: NodeData) => {
               const edgeToRemove = edges.find((edg) => edg.to === from.id);
-              console.log({edgeToRemove});
               const edgeToAdd = {id: `e${to.id}-${from.id}`, from: `${to.id}`, to: `${from.id}`};
-              console.log({edgeToAdd});
               const newEdges = [...edges.filter(edge => edgeToRemove && edge.id !== edgeToRemove.id), edgeToAdd];
-              setGraphValue("edges", newEdges); // These lines rewrite the edges but don't rewrite the JSON
-              setGraphEdited(true);
+              const newJsonStr = parseDataToJSON(nodes, newEdges);
+              setUpdatedJSON(newJsonStr);
+              setGraphValue("edges", newEdges); // rewrite graph edges
             }}           
           />
         </TransformComponent>
